@@ -1,0 +1,28 @@
+; ═══════════════════════════════════════════════════════════
+; ⚡ Potencia - Calcula x^n
+; power(x, n) = x elevado a la n
+; ═══════════════════════════════════════════════════════════
+
+; power(2, 3) = 2³ = 8
+(letrec ((power (lambda (x n)
+                  (if0 n 1
+                       (* x (power x (sub1 n)))))))
+  (power 2 3))
+
+; power(3, 4) = 3⁴ = 81
+(letrec ((power (lambda (x n)
+                  (if0 n 1
+                       (* x (power x (sub1 n)))))))
+  (power 3 4))
+
+; power(5, 2) = 5² = 25
+(letrec ((power (lambda (x n)
+                  (if0 n 1
+                       (* x (power x (sub1 n)))))))
+  (power 5 2))
+
+; power(10, 3) = 10³ = 1000
+(letrec ((power (lambda (x n)
+                  (if0 n 1
+                       (* x (power x (sub1 n)))))))
+  (power 10 3))

@@ -1,0 +1,34 @@
+; ═══════════════════════════════════════════════════════════
+; 📊 Factorial - Calcula n!
+; factorial(n) = n × (n-1) × ... × 2 × 1
+; ═══════════════════════════════════════════════════════════
+
+; factorial(1) = 1
+(letrec ((factorial (lambda (n)
+                      (if (<= n 1) 1
+                          (* n (factorial (- n 1)))))))
+  (factorial 1))
+
+; factorial(3) = 6
+(letrec ((factorial (lambda (n)
+                      (if (<= n 1) 1
+                          (* n (factorial (- n 1)))))))
+  (factorial 3))
+
+; factorial(5) = 120
+(letrec ((factorial (lambda (n)
+                      (if (<= n 1) 1
+                          (* n (factorial (- n 1)))))))
+  (factorial 5))
+
+; factorial(7) = 5040
+(letrec ((factorial (lambda (n)
+                      (if (<= n 1) 1
+                          (* n (factorial (- n 1)))))))
+  (factorial 7))
+
+; factorial(10) = 3628800
+(letrec ((factorial (lambda (n)
+                      (if (<= n 1) 1
+                          (* n (factorial (- n 1)))))))
+  (factorial 10))

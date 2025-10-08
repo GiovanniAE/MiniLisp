@@ -1,0 +1,12 @@
+﻿resolver: ghc-9.4.8
+
+packages:
+- .
+
+allow-newer: true
+allow-newer-deps:
+- '*'
+
+system-ghc: false
+install-ghc: true
+skip-ghc-check: false
