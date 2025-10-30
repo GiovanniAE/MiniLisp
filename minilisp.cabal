@@ -1,6 +1,6 @@
 cabal-version: 2.2
 name: minilisp
-version: 1.1.0
+version: 1.1.5
 synopsis: MiniLisp interpreter in Haskell
 description: Complete implementation of MiniLisp for Programming Languages course
 homepage: https://github.com/GiovanniAE/MiniLispApp.git
