@@ -26,7 +26,7 @@ Lenguajes de Programación, UNAM Facultad de Ciencias.
 ### Pasos
 ```bash
 # Clonar repositorio
-git clone https://github.com/GiovanniAE/MiniLispApp.git
+git clone https://github.com/GiovanniAE/MiniLisp.git
 cd minilisp
 
 # Compilar proyecto
