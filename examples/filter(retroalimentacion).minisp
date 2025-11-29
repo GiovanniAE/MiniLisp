@@ -1,0 +1,25 @@
+; ===== Corrección C2 =====
+; Se agregan casos de prueba para verificar el funcionamiento correcto de filter
+; conforme a la retroalimentación del módulo C.
+
+
+
+; Filter: mantiene elementos que cumplen predicado
+; filter p [] = []
+; filter p (x:xs) = (x : filter p xs) if p(x)
+;                 (filter p xs)    otherwise
+
+;(letrec
+;    ((filter (lambda (pred lst)
+;        (if (= lst [])
+;            []
+;            (let ((x (head lst))
+;                  (xs (tail lst)))
+;                (if (pred x)
+;                    [x | (filter pred xs)]
+;                    (filter pred xs)))))))
+
+; Ejemplo: números pares
+;    (let ((even? (lambda (x) (= (% x 2) 0)))) 
+;        (filter even? [1, 2, 3, 4, 5, 6])))
+; Resultado esperado: [2, 4, 6]

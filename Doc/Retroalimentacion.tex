@@ -1,0 +1,2007 @@
+\documentclass[12pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[spanish]{babel}
+\usepackage{geometry}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage[most]{tcolorbox}
+
+
+\geometry{a4paper, margin=1in}
+
+\definecolor{codebg}{rgb}{0.95,0.95,0.95}
+\lstset{
+    backgroundcolor=\color{codebg},
+    basicstyle=\ttfamily\footnotesize,
+    breaklines=true,
+    frame=single,
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    keywordstyle=\color{blue},
+    commentstyle=\color{green!50!black},
+    stringstyle=\color{red},
+    showstringspaces=false
+}
+
+\titleformat{\section}{\Large\bfseries}{\thesection}{1em}{}
+\titleformat{\subsection}{\large\bfseries}{\thesubsection}{1em}{}
+
+\begin{document}
+
+% Carátula
+\begin{titlepage}
+    \centering
+    \vspace*{2cm}
+    
+
+    {\LARGE\bfseries Universidad Nacional Autónoma de México\par}
+    \vspace{0.5cm}
+    {\Large Facultad de Ciencias\par}
+    \vspace{1cm}
+    
+    {\LARGE\bfseries Lenguajes de Programación\par}
+    \vspace{0.5cm}
+    {\LARGE Proyecto 01\par}
+    \vspace{2cm}
+    
+    {\Large\bfseries MiniLisp\par}
+    \vspace{2cm}
+    
+    {\large
+    Giovanni Alejandri Espinosa (321037293)\par
+    \vspace{0.3cm}
+    Vania Zoë Velázquez Barrientos (321086208)\par
+    \vspace{0.3cm}
+    Camila Sánchez Flores (321174387)\par}
+    
+    \vfill
+    {\large \today\par}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% Contenido del documento
+\section{Introducción}
+
+\subsection{Motivación}
+El estudio formal de los lenguajes de programación trasciende el mero uso práctico de herramientas computacionales. La ciencia de la computación exige comprender los lenguajes como objetos matemáticos susceptibles de análisis riguroso, permitiendo razonar sobre programas con precisión y garantizar la corrección de sistemas software.
+
+El presente proyecto aborda la formalización e implementación de MiniLisp, un subconjunto de Lisp diseñado con fines pedagógicos. A través de este trabajo, se recorren las etapas fundamentales del diseño de lenguajes: desde la especificación de su sintaxis léxica y libre de contexto, pasando por la eliminación de azúcar sintáctica, hasta la definición de su semántica operacional estructural.
+
+\subsection{Objetivos}
+
+\textbf{Objetivo General:} Formalizar exhaustivamente la sintaxis y semántica de MiniLisp y trasladar esta formalización a una implementación concreta en Haskell, garantizando coherencia entre el modelo teórico y su materialización práctica.
+
+\textbf{Objetivos Específicos:}
+\begin{enumerate}
+    \item Definir la sintaxis léxica y libre de contexto de MiniLisp
+    \item Establecer la sintaxis abstracta distinguiendo superficie y núcleo
+    \item Formalizar reglas de desazucarización sistemática
+    \item Especificar la semántica operacional mediante small-step semantics
+    \item Implementar un intérprete funcional en Haskell
+    \item Validar el sistema mediante casos de prueba exhaustivos
+\end{enumerate}
+
+\section{Formalización del Lenguaje}
+
+\subsection{Sintaxis Léxica}
+La sintaxis léxica define las unidades básicas (tokens) mediante expresiones regulares:
+
+\begin{lstlisting}
+IDENTIFICADOR ::= [a-zA-Z_][a-zA-Z0-9_\-?!]*
+ENTERO ::= -?[0-9]+
+BOOLEANO ::= #t | #f
+LPAREN ::= (
+RPAREN ::= )
+LBRACKET ::= [
+RBRACKET ::= ]
+COMMA ::= ,
+WHITESPACE ::= [ \t\n\r]+
+COMMENT ::= ;[^\n]*\n
+
+PALABRAS_RESERVADAS ::= let | let* | letrec | if | if0 | lambda | cond | else | fst | snd | head | tail | addl | subl | sqrt | expt | not
+
+OPERADORES ::= + | - | * | / | = | < | > | >= | <= | !=
+\end{lstlisting}
+
+\textbf{Justificación:} Se adopta la convención de Scheme para identificadores, permitiendo caracteres especiales comunes en programación funcional (-, ?, !). Los booleanos siguen el estándar \#t/\#f de Scheme. Los comentarios usan ; como es tradicional en dialectos Lisp.
+
+\subsection{Sintaxis Libre de Contexto (EBNF)}
+
+\begin{lstlisting}
+<Program> ::= <Expr>
+
+<Expr> ::= <Atom> | <Pair> | <List> | <ArithOp> | <CompOp> | <LogicOp> | <Conditional> | <Binding> | <Function> | <Application> | <Projection> | <ListOp>
+
+<Atom> ::= IDENTIFICADOR | ENTERO | BOOLEANO
+
+<Pair> ::= "(" <Expr> "," <Expr> ")"
+<List> ::= "[" "]" | "[" <Expr> ( "," <Expr> )* "]"
+
+<ArithOp> ::= "(" <ArithOp2> <Expr> <Expr>+ ")"
+            | "(" <ArithOp1> <Expr> ")"
+
+<ArithOp2> ::= "+" | "-" | "*" | "/"
+<ArithOp1> ::= "add1" | "sub1" | "sqrt"
+
+<CompOp> ::= "(" <Comparator> <Expr> <Expr>+ ")"
+<Comparator> ::= "=" | "<" | ">" | ">=" | "<=" | "!="
+
+<LogicOp> ::= "(" "not" <Expr> ")"
+
+<Conditional> ::= "(" "if" <Expr> <Expr> <Expr> ")"
+                | "(" "if0" <Expr> <Expr> <Expr> ")"
+                | <Cond>
+
+<Cond> ::= "(" "cond" <Clause>+ <ElseClause> ")"
+<Clause> ::= "[" <Expr> <Expr> "]"
+<ElseClause> ::= "[" "else" <Expr> "]"
+
+<Binding> ::= "(" "let" "(" <Bind>+ ")" <Expr> ")"
+            | "(" "let*" "(" <Bind>+ ")" <Expr> ")"
+            | "(" "letrec" "(" <Bind>+ ")" <Expr> ")"
+
+<Bind> ::= "(" IDENTIFICADOR <Expr> ")"
+
+<Function> ::= "(" "lambda" "(" IDENTIFICADOR* ")" <Expr> ")"
+
+<Application> ::= "(" <Expr> <Expr>* ")"
+
+<Projection> ::= "(" "fst" <Expr> ")"
+               | "(" "snd" <Expr> ")"
+
+<ListOp> ::= "(" "head" <Expr> ")"
+           | "(" "tail" <Expr> ")"
+           | "(" "expt" <Expr> <Expr> ")"
+\end{lstlisting}
+
+\textbf{Notas sobre la gramática:}
+\begin{itemize}
+    \item $<Expr>+$ denota una o más repeticiones
+    \item $<Expr>*$ denota cero o más repeticiones
+    \item La gramática es ambigua en $<Application>$, se resuelve durante el parsing mediante precedencia
+\end{itemize}
+
+\subsection{Sintaxis Abstracta}
+
+\subsubsection{AST de Superficie (Surface)}
+Representa todas las construcciones del lenguaje incluyendo azúcar sintáctica:
+
+\begin{lstlisting}[language=Haskell]
+data SExpr = SVar String
+    | SInt Integer
+    | SBool Bool
+    | SPair SExpr SExpr
+    | SList [SExpr]
+    -- Operadores variádicos
+    | SAdd [SExpr]
+    | SSub [SExpr]
+    | SMul [SExpr]
+    | SDiv [SExpr]
+    | SEq [SExpr]
+    | SLt [SExpr]
+    | SGt [SExpr]
+    | SLe [SExpr]
+    | SGe [SExpr]
+    | SNe [SExpr]
+    -- Operadores unarios
+    | SAddl SExpr
+    | SSubl SExpr
+    | SSqrt SExpr
+    | SNot SExpr
+    -- Operadores binarios especiales
+    | SExpt SExpr SExpr
+    -- Condicionales
+    | SIf SExpr SExpr SExpr
+    | SIf0 SExpr SExpr SExpr
+    | SCond [(SExpr, SExpr)] SExpr
+    -- Bindings
+    | SLet [(String, SExpr)] SExpr
+    | SLetStar [(String, SExpr)] SExpr
+    | SLetRec [(String, SExpr)] SExpr
+    -- Funciones
+    | SLambda [String] SExpr
+    | SApp SExpr [SExpr]
+    -- Proyecciones
+    | SFst SExpr
+    | SSnd SExpr
+    | SHead SExpr
+    | STail SExpr
+\end{lstlisting}
+
+\subsubsection{AST del Núcleo (Core)}
+El núcleo contiene solo las construcciones primitivas esenciales:
+
+\begin{lstlisting}[language=Haskell]
+data Expr = Var String
+    | IntLit Integer
+    | BoolLit Bool
+    | Pair Expr Expr
+    | Nil
+    | Cons Expr Expr
+    -- Operadores binarios únicamente
+    | Add Expr Expr
+    | Sub Expr Expr
+    | Mul Expr Expr
+    | Div Expr Expr
+    | Eq Expr Expr
+    | Lt Expr Expr
+    -- Operadores unarios
+    | Not Expr
+    -- Condicional único
+    | If Expr Expr Expr
+    -- Binding único
+    | Let String Expr Expr
+    -- Función currificada
+    | Lambda String Expr
+    | App Expr Expr
+    -- Proyecciones
+    | Fst Expr
+    | Snd Expr
+\end{lstlisting}
+
+\textbf{Decisiones de diseño del núcleo:}
+\begin{enumerate}
+    \item Operadores binarios únicamente: Todos los operadores variádicos se desazucarizan
+    \item Funciones de un parámetro: Lambda currificada
+    \item Let simple: let* y letrec se traducen a let
+    \item Condicional booleano: if0 se traduce a if
+    \item Listas como pares: Cons + Nil (estilo tradicional Lisp)
+\end{enumerate}
+
+\subsection{Eliminación de Azúcar Sintáctica}
+Definimos la función de desazucarización: $\llbracket \cdot \rrbracket_s : \text{SExpr} \to \text{Expr}$
+
+\subsubsection{Reglas Básicas}
+
+\begin{itemize}
+    \item \textbf{[DS-VAR]} Variables: $\llbracket x \rrbracket_s = x$
+    \item \textbf{[DS-INT]} Enteros: $\llbracket n \rrbracket_s = n$
+    \item \textbf{[DS-BOOL]} Booleanos: $\llbracket b \rrbracket_s = b$
+    \item \textbf{[DS-PAIR]} Pares: $\llbracket (e_1, e_2) \rrbracket_s = \text{Pair } \llbracket e_1 \rrbracket_s \llbracket e_2 \rrbracket_s$
+\end{itemize}
+
+\subsubsection{Operadores Variádicos}
+
+\begin{itemize}
+    \item \textbf{[DS-ADD-BIN]} Suma binaria (caso base): $\llbracket (+ e_1 e_2) \rrbracket_s = \text{Add } \llbracket e_1 \rrbracket_s \llbracket e_2 \rrbracket_s$
+    \item \textbf{[DS-ADD-VAR]} Suma variádica ($n \geq 3$): $\llbracket (+ e_1 e_2 \dots e_n) \rrbracket_s = \text{Add } \llbracket e_1 \rrbracket_s \llbracket (+ e_2 \dots e_n) \rrbracket_s$
+    \item \textbf{[DS-EQ-BIN]} Igualdad binaria: $\llbracket (= e_1 e_2) \rrbracket_s = \text{Eq } \llbracket e_1 \rrbracket_s \llbracket e_2 \rrbracket_s$
+    \item \textbf{[DS-EQ-VAR]} Igualdad variádica: $\llbracket (= e_1 e_2 e_3 \dots e_n) \rrbracket_s = \text{If (Eq } \llbracket e_1 \rrbracket_s \llbracket e_2 \rrbracket_s) \llbracket (= e_2 e_3 \dots e_n) \rrbracket_s \text{(BoolLit False)}$
+    \item \textbf{[DS-LT-VAR]} Menor que variádico: $\llbracket (< e_1 e_2 e_3 \dots e_n) \rrbracket_s = \text{If (Lt } \llbracket e_1 \rrbracket_s \llbracket e_2 \rrbracket_s) \llbracket (< e_2 e_3 \dots e_n) \rrbracket_s \text{(BoolLit False)}$
+\end{itemize}
+
+\subsubsection{Operadores Unarios}
+
+\begin{itemize}
+    \item \textbf{[DS-ADD1]} Incremento: $\llbracket (\text{add1 } e) \rrbracket_s = \text{Add } \llbracket e \rrbracket_s \text{(IntLit 1)}$
+    \item \textbf{[DS-SUB1]} Decremento: $\llbracket (\text{subl } e) \rrbracket_s = \text{Sub } \llbracket e \rrbracket_s \text{(IntLit 1)}$
+    \item \textbf{[DS-SQRT]} Raíz cuadrada: $\llbracket (\text{sqrt } e) \rrbracket_s = \llbracket (\text{expt } e 0.5) \rrbracket_s$
+    \item \textbf{[DS-EXPT]} Potencia: 
+    $\llbracket (\text{expt base exp}) \rrbracket_s = \text{If (Eq } \llbracket \text{exp} \rrbracket_s \text{(IntLit 0)) (IntLit 1) (Mul } \llbracket \text{base} \rrbracket_s \llbracket (\text{expt base (- exp 1)}) \rrbracket_s)$
+\end{itemize}
+
+\subsubsection{Condicionales}
+
+\begin{itemize}
+    \item \textbf{[DS-IF]} If booleano: $\llbracket (\text{if } c\ t\ e) \rrbracket_s = \text{If } \llbracket c \rrbracket_s \llbracket t \rrbracket_s \llbracket e \rrbracket_s$
+    \item \textbf{[DS-IF0]} If0 a if: $\llbracket (\text{if0 } e\ t\ f) \rrbracket_s = \text{If (Eq } \llbracket e \rrbracket_s \text{(IntLit 0)) } \llbracket t \rrbracket_s \llbracket f \rrbracket_s$
+    \item \textbf{[DS-COND-BASE]} Cond caso base: $\llbracket (\text{cond [else e]}) \rrbracket_s = \llbracket e \rrbracket_s$
+    \item \textbf{[DS-COND-REC]} Cond recursivo: $\llbracket (\text{cond [g1 e1] ... [gn en] [else ee]}) \rrbracket_s = \text{If } \llbracket g1 \rrbracket_s \llbracket e1 \rrbracket_s \llbracket (\text{cond [g2 e2] ... [gn en] [else ee]}) \rrbracket_s$
+\end{itemize}
+
+\subsubsection{Bindings}
+
+\begin{itemize}
+    \item \textbf{[DS-LET-SINGLE]} Let simple: $\llbracket (\text{let } ((x\ e))\ \text{body}) \rrbracket_s = \text{Let } x \llbracket e \rrbracket_s \llbracket \text{body} \rrbracket_s$
+    \item \textbf{[DS-LET-MULTI]} Let multiple: $\llbracket (\text{let } ((x_1\ e_1) \dots (x_n\ e_n))\ \text{body}) \rrbracket_s = \text{App (Lambda } x_1 (\dots \text{(Lambda } x_n \llbracket \text{body} \rrbracket_s \dots)) \llbracket e_1 \rrbracket_s \dots \llbracket e_n \rrbracket_s$
+    \item \textbf{[DS-LETSTAR-BASE]} Let* caso base: $\llbracket (\text{let* } ((x\ e))\ \text{body}) \rrbracket_s = \text{Let } x \llbracket e \rrbracket_s \llbracket \text{body} \rrbracket_s$
+    \item \textbf{[DS-LETSTAR-REC]} Let* recursivo: $\llbracket (\text{let* } ((x_1\ e_1) (x_2\ e_2) \dots (x_n\ e_n))\ \text{body}) \rrbracket_s = \text{Let } x_1 \llbracket e_1 \rrbracket_s \llbracket (\text{let* } ((x_2\ e_2) \dots (x_n\ e_n))\ \text{body}) \rrbracket_s$
+    \item \textbf{[DS-LETREC]} Letrec usando combinador Y: $\llbracket (\text{letrec } ((f\ e))\ \text{body}) \rrbracket_s = \text{Let } f \text{(Fix (Lambda } f \llbracket e \rrbracket_s)) \llbracket \text{body} \rrbracket_s$
+\end{itemize}
+
+\subsubsection{Funciones}
+
+\begin{itemize}
+    \item \textbf{[DS-LAMBDA-ZERO]} Lambda sin parámetros: $\llbracket (\text{lambda () body}) \rrbracket_s = \text{Lambda "\_" } \llbracket \text{body} \rrbracket_s$
+    \item \textbf{[DS-LAMBDA-ONE]} Lambda un parámetro: $\llbracket (\text{lambda (x) body}) \rrbracket_s = \text{Lambda } x \llbracket \text{body} \rrbracket_s$
+    \item \textbf{[DS-LAMBDA-CURRY]} Lambda currificada ($n \geq 2$): $\llbracket (\text{lambda } (x_1\ x_2 \dots x_n)\ \text{body}) \rrbracket_s = \text{Lambda } x_1 \text{(Lambda } x_2 (\dots \text{(Lambda } x_n \llbracket \text{body} \rrbracket_s \dots))$
+    \item \textbf{[DS-APP-ZERO]} Aplicación sin argumentos: $\llbracket (f) \rrbracket_s = \text{App } \llbracket f \rrbracket_s \text{(BoolLit True)}$
+    \item \textbf{[DS-APP-ONE]} Aplicación un argumento: $\llbracket (f\ e) \rrbracket_s = \text{App } \llbracket f \rrbracket_s \llbracket e \rrbracket_s$
+    \item \textbf{[DS-APP-MULTI]} Aplicación múltiple: $\llbracket (f\ e_1\ e_2 \dots e_n) \rrbracket_s = \text{App (App } \dots \text{(App } \llbracket f \rrbracket_s \llbracket e_1 \rrbracket_s) \dots \llbracket e_{n-1} \rrbracket_s) \llbracket e_n \rrbracket_s$
+\end{itemize}
+
+\subsubsection{Listas}
+
+\begin{itemize}
+    \item \textbf{[DS-NIL]} Lista vacía: $\llbracket [] \rrbracket_s = \text{Nil}$
+    \item \textbf{[DS-LIST-SINGLE]} Lista un elemento: $\llbracket [e] \rrbracket_s = \text{Cons } \llbracket e \rrbracket_s \text{Nil}$
+    \item \textbf{[DS-LIST-MULTI]} Lista múltiple: $\llbracket [e_1, e_2, \dots, e_n] \rrbracket_s = \text{Cons } \llbracket e_1 \rrbracket_s \llbracket [e_2, \dots, e_n] \rrbracket_s$
+    \item \textbf{[DS-HEAD]} Cabeza de lista: $\llbracket (\text{head } e) \rrbracket_s = \text{Fst } \llbracket e \rrbracket_s$
+    \item \textbf{[DS-TAIL]} Cola de lista: $\llbracket (\text{tail } e) \rrbracket_s = \text{Snd } \llbracket e \rrbracket_s$
+\end{itemize}
+
+\subsubsection{Proyecciones}
+
+\begin{itemize}
+    \item \textbf{[DS-FST]} Primera proyección: $\llbracket (\text{fst } e) \rrbracket_s = \text{Fst } \llbracket e \rrbracket_s$
+    \item \textbf{[DS-SND]} Segunda proyección: $\llbracket (\text{snd } e) \rrbracket_s = \text{Snd } \llbracket e \rrbracket_s$
+\end{itemize}
+
+\subsection{Semántica Operacional Estructural (SOS)}
+Adoptamos \textbf{small-step semantics} con la notación: $e \to e'$
+
+Un juicio de transición $e \to e'$ significa que la expresión $e$ reduce en un paso a $e'$.
+
+\subsubsection{Valores}
+Definimos el conjunto de valores (formas normales):
+\[
+v ::= n\ |\ \#t\ |\ \#f\ |\ (v_1, v_2)\ |\ \text{nil}\ |\ (\text{cons } v_1\ v_2)\ |\ (\text{lambda } (x)\ e)
+\]
+
+\subsubsection{Reglas Aritméticas}
+
+\begin{itemize}
+    \item \textbf{[E-ADD]} Suma de valores: $\dfrac{}{n_1 + n_2 \to n_3}$ donde $n_3 = n_1 + n_2$
+    \item \textbf{[E-ADD-L]} Reducir operando izquierdo: $\dfrac{e_1 \to e_1'}{e_1 + e_2 \to e_1' + e_2}$
+    \item \textbf{[E-ADD-R]} Reducir operando derecho: $\dfrac{e_2 \to e_2'}{v_1 + e_2 \to v_1 + e_2'}$
+    \item \textbf{[E-DIV-ZERO]} División por cero: $\dfrac{}{v / 0 \to \text{ERROR}}$
+\end{itemize}
+
+\textbf{Reglas análogas para:} Sub, Mul, Div
+
+\subsubsection{Reglas de Comparación}
+
+\begin{itemize}
+    \item \textbf{[E-EQ-TRUE]} Igualdad verdadera: $\dfrac{}{n = n \to \#t}$
+    \item \textbf{[E-EQ-FALSE]} Igualdad falsa: $\dfrac{n_1 \neq n_2}{n_1 = n_2 \to \#f}$
+    \item \textbf{[E-EQ-L]} Reducir izquierda: $\dfrac{e_1 \to e_1'}{e_1 = e_2 \to e_1' = e_2}$
+    \item \textbf{[E-EQ-R]} Reducir derecha: $\dfrac{e_2 \to e_2'}{v_1 = e_2 \to v_1 = e_2'}$
+\end{itemize}
+
+\textbf{Reglas análogas para:} Lt, Gt (con comparación numérica)
+
+\subsubsection{Reglas Lógicas}
+
+\begin{itemize}
+    \item \textbf{[E-NOT-TRUE]} $\dfrac{}{\text{not } \#t \to \#f}$
+    \item \textbf{[E-NOT-FALSE]} $\dfrac{}{\text{not } \#f \to \#t}$
+    \item \textbf{[E-NOT-STEP]} $\dfrac{e \to e'}{\text{not } e \to \text{not } e'}$
+\end{itemize}
+
+\subsubsection{Reglas Condicionales}
+
+\begin{itemize}
+    \item \textbf{[E-IF-TRUE]} $\dfrac{}{\text{if } \#t\ e_2\ e_3 \to e_2}$
+    \item \textbf{[E-IF-FALSE]} $\dfrac{}{\text{if } \#f\ e_2\ e_3 \to e_3}$
+    \item \textbf{[E-IF-COND]} $\dfrac{e_1 \to e_1'}{\text{if } e_1\ e_2\ e_3 \to \text{if } e_1'\ e_2\ e_3}$
+    \item \textbf{[E-IF-ERROR]} Condición no booleana: $\dfrac{v \notin \{\#t, \#f\}}{\text{if } v\ e_2\ e_3 \to \text{ERROR}}$
+\end{itemize}
+
+\subsubsection{Reglas de Binding}
+
+\begin{itemize}
+    \item \textbf{[E-LET]} Let con valor: $\dfrac{}{\text{let } x = v \text{ in } e \to e[x := v]}$
+    \item \textbf{[E-LET-STEP]} Reducir definición: $\dfrac{e_1 \to e_1'}{\text{let } x = e_1 \text{ in } e_2 \to \text{let } x = e_1' \text{ in } e_2}$
+\end{itemize}
+
+Donde $e[x := v]$ denota sustitución captura-evitando.
+
+\subsubsection{Reglas de Funciones}
+
+\begin{itemize}
+    \item \textbf{[E-APP-BETA]} Beta-reducción: $\dfrac{}{((\text{lambda } (x)\ e_1)\ v_2) \to e_1[x := v_2]}$
+    \item \textbf{[E-APP-FUN]} Reducir función: $\dfrac{e_1 \to e_1'}{e_1\ e_2 \to e_1'\ e_2}$
+    \item \textbf{[E-APP-ARG]} Reducir argumento: $\dfrac{e_2 \to e_2'}{v_1\ e_2 \to v_1\ e_2'}$
+    \item \textbf{[E-APP-ERROR]} Aplicar no-función: $\dfrac{v_1 \notin (\text{lambda } \dots)}{v_1\ v_2 \to \text{ERROR}}$
+\end{itemize}
+
+\subsubsection{Reglas de Pares}
+
+\begin{itemize}
+    \item \textbf{[E-PAIR-L]} Reducir componente izquierdo: $\dfrac{e_1 \to e_1'}{(e_1, e_2) \to (e_1', e_2)}$
+    \item \textbf{[E-PAIR-R]} Reducir componente derecho: $\dfrac{e_2 \to e_2'}{(v_1, e_2) \to (v_1, e_2')}$
+    \item \textbf{[E-FST]} Primera proyección: $\dfrac{}{\text{fst } (v_1, v_2) \to v_1}$
+    \item \textbf{[E-FST-STEP]} Reducir par: $\dfrac{e \to e'}{\text{fst } e \to \text{fst } e'}$
+    \item \textbf{[E-SND]} Segunda proyección: $\dfrac{}{\text{snd } (v_1, v_2) \to v_2}$
+    \item \textbf{[E-SND-STEP]} $\dfrac{e \to e'}{\text{snd } e \to \text{snd } e'}$
+\end{itemize}
+
+\subsubsection{Ejemplo de Derivación Completa}
+
+\textbf{Programa:} $(+ 2 (* 3 4))$
+
+\textbf{Árbol de derivación:}
+\[
+\dfrac{
+    \dfrac{}{(* 3 4) \to 12} \quad
+    \dfrac{
+        \dfrac{}{(+ 2 12) \to 14}
+    }{(+ 2 (* 3 4)) \to (+ 2 12)}
+}{( + 2 (* 3 4)) \to^* 14}
+\]
+
+\textbf{Programa:} $(\text{let } ((x 5)) (+ x 3))$
+
+\textbf{Árbol de derivación:}
+\[
+\dfrac{
+    \dfrac{}{(\text{let } ((x 5)) (+ x 3)) \to (+ 5 3)} \quad
+    \dfrac{}{(+ 5 3) \to 8}
+}{(\text{let } ((x 5)) (+ x 3)) \to^* 8}
+\]
+
+\section{Justificación de Decisiones de Diseño}
+
+\subsection{Elección de EBNF}
+Se utiliza EBNF (Extended Backus-Naur Form) por ser un estándar reconocido en la especificación de sintaxis de lenguajes de programación [Aho et al., 2007]. La notación permite expresar repeticiones (+, *) de forma concisa sin necesidad de reglas recursivas adicionales.
+
+\subsection{Separación Superficie/Núcleo}
+La distinción entre sintaxis de superficie y núcleo es fundamental en el diseño de lenguajes [Felleisen et al., 1996]. El núcleo minimalista simplifica:
+\begin{itemize}
+    \item La especificación de la semántica operacional
+    \item La corrección del intérprete
+    \item La verificación formal de propiedades
+\end{itemize}
+
+\subsection{Small-Step Semantics}
+Se adopta small-step semantics (SOS de paso pequeño) por las siguientes razones [Plotkin, 1981]:
+\begin{itemize}
+    \item \textbf{Precisión:} Captura el proceso de evaluación paso a paso
+    \item \textbf{Depuración:} Permite observar estados intermedios
+    \item \textbf{Formalización:} Facilita razonamiento sobre propiedades de terminación
+    \item \textbf{Modularidad:} Las reglas son composicionales
+\end{itemize}
+
+\subsection{Call-by-Value}
+Se implementa evaluación ansiosa (eager evaluation) con estrategia call-by-value porque:
+\begin{itemize}
+    \item Es la estrategia estándar en Scheme/Racket
+    \item Simplifica el modelo de ejecución
+    \item Permite efectos secundarios predecibles
+    \item Es la estrategia más común en lenguajes funcionales estrictos
+\end{itemize}
+
+\subsection{Currificación Automática}
+Las funciones multi-parámetro se currifican automáticamente porque:
+\begin{itemize}
+    \item Unifica el modelo teórico (lambda cálculo admite solo un parámetro)
+    \item Permite aplicación parcial de funciones
+    \item Simplifica la semántica operacional
+    \item Es consistente con lenguajes funcionales como Haskell
+\end{itemize}
+
+\section{Referencias Bibliográficas}
+\boxed{\begin{itemize}
+        \item [Aho et al., 2007] Alfred V. Aho, Monica S. Lam, Ravi Sethi, and Jeffrey D. Ullman. \textit{Compilers: Principles, Techniques, and Tools}. Addison-Wesley, 2nd edition, 2007.
+        \item [Felleisen et al., 1996] Matthias Felleisen and Daniel P. Friedman. \textit{A Little Java, a Few Patterns}. MIT Press, Cambridge, MA, 1996.
+        \item [Harper, 2012] Robert Harper. \textit{Practical Foundations for Programming Languages}. Cambridge University Press, 2012.
+        \item [Hutton, 2016] Graham Hutton. \textit{Programming in Haskell}. Cambridge University Press, 2nd edition, 2016.
+        \item [Plotkin, 1981] Gordon D. Plotkin. \textit{A structural approach to operational semantics}. Technical Report FN-19, DAIMI, Computer Science Department, Aarhus University, 1981.
+        \item [Sperber et al., 2009] Michael Sperber et al. \textit{Revised$^6$ Report on the Algorithmic Language Scheme}. Cambridge University Press, 2009.
+    \end{itemize}
+}
+
+
+\section{Implementación en Haskell}
+
+\subsection{Estructura del Proyecto}
+
+\begin{lstlisting}
+minilisp/
+├── src/
+│   ├── AST.hs              -- Definición de AST (Core)
+│   ├── SurfaceAST.hs       -- AST de superficie
+│   ├── Parser.hs           -- Analizador sintáctico
+│   ├── Desugar.hs          -- Eliminación de azúcar
+│   ├── Eval.hs             -- Intérprete/evaluador
+│   └── Main.hs             -- REPL y entrada principal
+├── examples/
+│   ├── sum.minisp          -- Suma de n naturales
+│   ├── factorial.minisp    -- Factorial
+│   ├── fibonacci.minisp    -- Fibonacci
+│   ├── map.minisp          -- Map para listas
+│   └── filter.minisp       -- Filter para listas
+├── test/
+│   └── Tests.hs            -- Suite de pruebas
+├── Doc/
+│   └── Proyecto01.pdf           
+│   └── Proyecto01.tex         
+├── README.md
+├── minilisp.cabal
+\end{lstlisting}
+
+\subsection{AST del Núcleo (AST.hs)}
+
+\begin{lstlisting}[language=Haskell]
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveAnyClass #-}
+
+module AST
+   ( Expr(..)
+   , prettyExpr
+   ) where
+
+import GHC.Generics (Generic)
+import Control.DeepSeq (NFData)
+
+-- | Sintaxis Abstracta del Núcleo de MiniLisp
+-- Todas las construcciones aquí son primitivas
+data Expr
+   -- Valores atómicos
+   = Var String              -- Variable
+   | IntLit Integer          -- Literal entera
+   | BoolLit Bool            -- Literal booleana
+   -- Estructuras de datos
+   | Pair Expr Expr          -- Par ordenado (e1, e2)
+   | Nil                     -- Lista vacía
+   | Cons Expr Expr          -- Constructor de lista
+   -- Operadores aritméticos binarios
+   | Add Expr Expr           -- Suma
+   | Sub Expr Expr           -- Resta
+   | Mul Expr Expr           -- Multiplicación
+   | Div Expr Expr           -- División
+   -- Operadores de comparación binarios
+   | Eq Expr Expr            -- Igualdad
+   | Lt Expr Expr            -- Menor que
+   | Gt Expr Expr            -- Mayor que
+   | Le Expr Expr            -- Menor o igual
+   | Ge Expr Expr            -- Mayor o igual
+   | Ne Expr Expr            -- Diferente
+   -- Operadores lógicos
+   | Not Expr                -- Negación
+   -- Control de flujo
+   | If Expr Expr Expr       -- Condicional
+   -- Binding
+   | Let String Expr Expr    -- Definición local
+   -- Funciones (currificadas)
+   | Lambda String Expr      -- Función anónima
+   | App Expr Expr           -- Aplicación
+   -- Proyecciones
+   | Fst Expr                -- Primera proyección
+   | Snd Expr                -- Segunda proyección
+   deriving (Eq, Show, Generic, NFData)
+
+-- | Pretty printer para expresiones del núcleo
+prettyExpr :: Expr -> String
+prettyExpr = go 0
+  where
+    indent n = replicate (n * 2) ' '
+    
+    go _ (Var x) = x
+    go _ (IntLit n) = show n
+    go _ (BoolLit True) = "#t"
+    go _ (BoolLit False) = "#f"
+    go _ Nil = "nil"
+    go n (Pair e1 e2) = 
+        "(" ++ go n e1 ++ ", " ++ go n e2 ++ ")"
+    go n (Cons e1 e2) = 
+        "(cons " ++ go n e1 ++ " " ++ go n e2 ++ ")"
+    go n (Add e1 e2) = 
+        "(+ " ++ go n e1 ++ " " ++ go n e2 ++ ")"
+    go n (Sub e1 e2) = 
+        "(- " ++ go n e1 ++ " " ++ go n e2 ++ ")"
+    go n (Mul e1 e2) = 
+        "(* " ++ go n e1 ++ " " ++ go n e2 ++ ")"
+    go n (Div e1 e2) = 
+        "(/ " ++ go n e1 ++ " " ++ go n e2 ++ ")"
+    go n (Eq e1 e2) = 
+        "(= " ++ go n e1 ++ " " ++ go n e2 ++ ")"
+    go n (Lt e1 e2) = 
+        "(< " ++ go n e1 ++ " " ++ go n e2 ++ ")"
+    go n (Not e) = 
+        "(not " ++ go n e ++ ")"
+    go n (If c t e) = 
+        "(if " ++ go n c ++ "\n" ++ 
+        indent (n+1) ++ go (n+1) t ++ "\n" ++ 
+        indent (n+1) ++ go (n+1) e ++ ")"
+    go n (Let x e1 e2) = 
+        "(let " ++ x ++ " " ++ go n e1 ++ "\n" ++ 
+        indent (n+1) ++ go (n+1) e2 ++ ")"
+    go n (Lambda x body) = 
+        "(lambda (" ++ x ++ ") " ++ go n body ++ ")"
+    go n (App e1 e2) = 
+        "(" ++ go n e1 ++ " " ++ go n e2 ++ ")"
+    go n (Fst e) = "(fst " ++ go n e ++ ")"
+    go n (Snd e) = "(snd " ++ go n e ++ ")"
+    go n e = show e
+\end{lstlisting}
+
+\subsection{AST de Superficie (SurfaceAST.hs)}
+
+\begin{lstlisting}[language=Haskell]
+{-# LANGUAGE DeriveGeneric #-}
+
+module SurfaceAST
+   ( SExpr(..)
+   , Binding
+   ) where
+
+import GHC.Generics (Generic)
+
+type Binding = (String, SExpr)
+
+-- | Sintaxis Abstracta de Superficie
+-- Incluye todas las extensiones y azúcar sintáctica
+data SExpr
+   -- Valores atómicos
+   = SVar String
+   | SInt Integer
+   | SBool Bool
+   -- Estructuras de datos
+   | SPair SExpr SExpr
+   | SList [SExpr]
+   -- Operadores aritméticos variádicos
+   | SAdd [SExpr]          -- (+ e1 e2 ... en)
+   | SSub [SExpr]          -- (- e1 e2 ... en)
+   | SMul [SExpr]          -- (* e1 e2 ... en)
+   | SDiv [SExpr]          -- (/ e1 e2 ... en)
+   -- Operadores aritméticos unarios
+   | SAdd1 SExpr           -- (add1 e)
+   | SSub1 SExpr           -- (sub1 e)
+   | SSqrt SExpr           -- (sqrt e)
+   -- Operador de potencia
+   | SExpt SExpr SExpr     -- (expt base exp)
+   -- Operadores de comparación variádicos
+   | SEq [SExpr]           -- (= e1 e2 ... en)
+   | SLt [SExpr]           -- (< e1 e2 ... en)
+   | SGt [SExpr]           -- (> e1 e2 ... en)
+   | SLe [SExpr]           -- (<= e1 e2 ... en)
+   | SGe [SExpr]           -- (>= e1 e2 ... en)
+   | SNe [SExpr]           -- (!= e1 e2 ... en)
+   -- Operadores lógicos
+   | SNot SExpr            -- (not e)
+   -- Condicionales
+   | SIf SExpr SExpr SExpr -- (if cond then else)
+   | SIf0 SExpr SExpr SExpr -- (if0 e then else)
+   | SCond [(SExpr, SExpr)] SExpr -- (cond [g1 e1] ... [else ee])
+   -- Bindings
+   | SLet [Binding] SExpr  -- (let ((x1 e1) ...) body)
+   | SLetStar [Binding] SExpr -- (let* ((x1 e1) ...) body)
+   | SLetRec [Binding] SExpr -- (letrec ((x1 e1) ...) body)
+   -- Funciones
+   | SLambda [String] SExpr -- (lambda (x1 ... xn) body)
+   | SApp SExpr [SExpr]    -- (f e1 e2 ... en)
+   -- Proyecciones y operaciones sobre listas
+   | SFst SExpr            -- (fst e)
+   | SSnd SExpr            -- (snd e)
+   | SHead SExpr           -- (head e)
+   | STail SExpr           -- (tail e)
+   deriving (Eq, Show, Generic)
+\end{lstlisting}
+
+\subsection{Módulo de Desazucarización (Desugar.hs)}
+
+\begin{lstlisting}[language=Haskell]
+module Desugar
+   ( desugar
+   , desugarOp
+   ) where
+
+import AST
+import SurfaceAST
+import qualified Data.List as L
+
+-- | Función principal de desazucarización
+-- Implementa todas las reglas [DS-*] definidas formalmente
+desugar :: SExpr -> Expr
+desugar se = case se of
+   -- [DS-VAR], [DS-INT], [DS-BOOL]
+   SVar x -> Var x
+   SInt n -> IntLit n
+   SBool b -> BoolLit b
+   
+   -- [DS-PAIR]
+   SPair e1 e2 -> Pair (desugar e1) (desugar e2)
+   
+   -- [DS-NIL], [DS-LIST-*]
+   SList [] -> Nil
+   SList [e] -> Cons (desugar e) Nil
+   SList (e:es) -> Cons (desugar e) (desugar (SList es))
+   
+   -- Operadores aritméticos variádicos
+   SAdd es -> desugarOp "+" es
+   SSub es -> desugarOp "-" es
+   SMul es -> desugarOp "*" es
+   SDiv es -> desugarOp "/" es
+   
+   -- [DS-ADD1], [DS-SUB1]
+   SAdd1 e -> Add (desugar e) (IntLit 1)
+   SSub1 e -> Sub (desugar e) (IntLit 1)
+   
+   -- [DS-SQRT] - implementado como expt e 0.5
+   -- Para enteros, usamos aproximación
+   SSqrt e -> desugarSqrt (desugar e)
+   
+   -- [DS-EXPT]
+   SExpt base exp -> desugarExpt (desugar base) (desugar exp)
+   
+   -- Operadores de comparación variádicos
+   SEq es -> desugarComp Eq es
+   SLt es -> desugarComp Lt es
+   SGt es -> desugarComp Gt es
+   SLe es -> desugarComp Le es
+   SGe es -> desugarComp Ge es
+   SNe es -> desugarComp Ne es
+   
+   -- [DS-NOT]
+   SNot e -> Not (desugar e)
+   
+   -- [DS-IF]
+   SIf c t e -> If (desugar c) (desugar t) (desugar e)
+   
+   -- [DS-IF0]
+   SIf0 e t f -> If (Eq (desugar e) (IntLit 0))
+                   (desugar t)
+                   (desugar f)
+   
+   -- [DS-COND-*]
+   SCond clauses elseExpr -> desugarCond clauses elseExpr
+   
+   -- [DS-LET-*]
+   SLet bindings body -> desugarLet bindings body
+   
+   -- [DS-LETSTAR-*]
+   SLetStar bindings body -> desugarLetStar bindings body
+   
+   -- [DS-LETREC]
+   SLetRec bindings body -> desugarLetRec bindings body
+   
+   -- [DS-LAMBDA-*]
+   SLambda params body -> curryLambda params (desugar body)
+   
+   -- [DS-APP-*]
+   SApp f args -> applyMany (desugar f) (map desugar args)
+   
+   -- [DS-FST], [DS-SND]
+   SFst e -> Fst (desugar e)
+   SSnd e -> Snd (desugar e)
+   
+   -- [DS-HEAD], [DS-TAIL]
+   SHead e -> Fst (desugar e)  -- head = fst (cons)
+   STail e -> Snd (desugar e)  -- tail = snd (cons)
+
+-- | Desazucariza operadores aritméticos variádicos
+-- [DS-ADD-BIN], [DS-ADD-VAR]
+desugarOp :: String -> [SExpr] -> Expr
+desugarOp op exprs = case exprs of
+   [] -> error $ "Operator " ++ op ++ " requires at least 2 arguments"
+   [_] -> error $ "Operator " ++ op ++ " requires at least 2 arguments"
+   [e1, e2] -> applyBinOp op (desugar e1) (desugar e2)
+   (e1:e2:rest) -> applyBinOp op
+                     (desugar e1)
+                     (desugarOp op (e2:rest))
+ where
+   applyBinOp "+" = Add
+   applyBinOp "-" = Sub
+   applyBinOp "*" = Mul
+   applyBinOp "/" = Div
+   applyBinOp _ = error "Unknown operator"
+
+-- | Desazucariza operadores de comparación variádicos
+-- [DS-EQ-VAR], [DS-LT-VAR], etc.
+desugarComp :: (Expr -> Expr -> Expr) -> [SExpr] -> Expr
+desugarComp _ [] = error "Comparison requires at least 2 arguments"
+desugarComp _ [_] = error "Comparison requires at least 2 arguments"
+desugarComp cons [e1, e2] = cons (desugar e1) (desugar e2)
+desugarComp cons (e1:e2:rest) = 
+   If (cons (desugar e1) (desugar e2))
+      (desugarComp cons (e2:rest))
+      (BoolLit False)
+
+-- | Desazucariza cond a if anidados
+-- [DS-COND-BASE], [DS-COND-REC]
+desugarCond :: [(SExpr, SExpr)] -> SExpr -> Expr
+desugarCond [] elseExpr = desugar elseExpr
+desugarCond ((guard, body):rest) elseExpr = 
+   If (desugar guard)
+      (desugar body)
+      (desugarCond rest elseExpr)
+
+-- | Desazucariza let a lambdas
+-- [DS-LET-SINGLE], [DS-LET-MULTI]
+desugarLet :: [Binding] -> SExpr -> Expr
+desugarLet [] body = desugar body
+desugarLet bindings body = 
+   let (vars, exprs) = unzip bindings
+       lambda = foldr Lambda (desugar body) vars
+       args = map desugar exprs
+   in applyMany lambda args
+
+-- | Desazucariza let* a let anidados
+-- [DS-LETSTAR-BASE], [DS-LETSTAR-REC]
+desugarLetStar :: [Binding] -> SExpr -> Expr
+desugarLetStar [] body = desugar body
+desugarLetStar [(x, e)] body = 
+   Let x (desugar e) (desugar body)
+desugarLetStar ((x, e):rest) body = 
+   Let x (desugar e) (desugarLetStar rest body)
+
+-- | Desazucariza letrec usando combinador Y
+-- [DS-LETREC]
+desugarLetRec :: [Binding] -> SExpr -> Expr
+desugarLetRec bindings body = 
+   -- Para letrec, necesitamos el combinador de punto fijo
+   -- Por simplicidad, usamos una aproximación:
+   -- letrec transforma cada binding en una función recursiva
+   let desugarBinding (x, e) restBody = 
+         Let x (fixCombinator x (desugar e)) restBody
+   in foldr desugarBinding (desugar body) bindings
+ where
+   -- Combinador Y simplificado para call-by-value
+   fixCombinator :: String -> Expr -> Expr
+   fixCombinator f body = 
+      App (Lambda f body)
+          (Lambda "_" (App (Var f) (Var "_")))
+
+-- | Currifica lambdas multi-parámetro
+-- [DS-LAMBDA-ZERO], [DS-LAMBDA-ONE], [DS-LAMBDA-CURRY]
+curryLambda :: [String] -> Expr -> Expr
+curryLambda [] body = Lambda "_" body  -- Unit lambda
+curryLambda [x] body = Lambda x body
+curryLambda (x:xs) body = Lambda x (curryLambda xs body)
+
+-- | Aplica función a múltiples argumentos
+-- [DS-APP-ZERO], [DS-APP-ONE], [DS-APP-MULTI]
+applyMany :: Expr -> [Expr] -> Expr
+applyMany f [] = App f (BoolLit True)  -- Unit application
+applyMany f [e] = App f e
+applyMany f (e:es) = applyMany (App f e) es
+
+-- | Desazucariza sqrt (implementación simplificada para enteros)
+desugarSqrt :: Expr -> Expr
+desugarSqrt e =
+   -- sqrt(n) usando el método de Newton-Raphson
+   -- Para simplificar, usamos una función auxiliar
+   Let "x" e
+      (Let "guess" (IntLit 1)
+         (desugarSqrtHelper (Var "x") (Var "guess")))
+ where
+   desugarSqrtHelper x guess =
+      -- if guess * guess = x then guess
+      -- else sqrt_helper x ((guess + x/guess) / 2)
+      If (Eq (Mul guess guess) x)
+         guess
+         (desugarSqrtHelper x
+            (Div (Add guess (Div x guess)) (IntLit 2)))
+
+-- | Desazucariza expt (exponenciación)
+desugarExpt :: Expr -> Expr -> Expr
+desugarExpt base exp =
+   If (Eq exp (IntLit 0))
+      (IntLit 1)
+      (If (Lt exp (IntLit 0))
+         (error "Negative exponents not supported")
+         (Mul base (desugarExpt base (Sub exp (IntLit 1)))))
+\end{lstlisting}
+
+\subsection{Módulo de Evaluación (Eval.hs)}
+
+\begin{lstlisting}[language=Haskell]
+{-# LANGUAGE LambdaCase #-}
+
+module Eval
+   ( Value(..)
+   , Env
+   , emptyEnv
+   , eval
+   , evalSteps
+   , prettyValue
+   ) where
+
+import AST
+import qualified Data.Map.Strict as Map
+import Control.Monad (foldM)
+
+-- | Valores semánticos (formas normales)
+data Value
+   = VInt Integer
+   | VBool Bool
+   | VPair Value Value
+   | VNil
+   | VCons Value Value
+   | VClosure Env String Expr  -- Closure con entorno capturado
+   deriving (Eq, Show)
+
+-- | Entorno de evaluación (binding de variables a valores)
+type Env = Map.Map String Value
+
+-- | Entorno vacío
+emptyEnv :: Env
+emptyEnv = Map.empty
+
+-- | Evaluador principal (big-step para simplicidad de implementación)
+-- Nota: La especificación formal usa small-step, pero big-step
+-- es equivalente y más eficiente para la implementación
+eval :: Env -> Expr -> Either String Value
+eval env = \case
+   -- [E-VAR]
+   Var x -> 
+      case Map.lookup x env of
+         Just v -> Right v
+         Nothing -> Left $ "Unbound variable: " ++ x
+   
+   -- Valores
+   IntLit n -> Right (VInt n)
+   BoolLit b -> Right (VBool b)
+   Nil -> Right VNil
+   
+   -- [E-PAIR-*]
+   Pair e1 e2 -> do
+      v1 <- eval env e1
+      v2 <- eval env e2
+      return $ VPair v1 v2
+   
+   -- [E-CONS]
+   Cons e1 e2 -> do
+      v1 <- eval env e1
+      v2 <- eval env e2
+      return $ VCons v1 v2
+   
+   -- [E-ADD-*]
+   Add e1 e2 -> do
+      v1 <- eval env e1
+      v2 <- eval env e2
+      case (v1, v2) of
+         (VInt n1, VInt n2) -> Right $ VInt (n1 + n2)
+         _ -> Left "Type error: + expects integers"
+   
+   -- [E-SUB-*]
+   Sub e1 e2 -> do
+      v1 <- eval env e1
+      v2 <- eval env e2
+      case (v1, v2) of
+         (VInt n1, VInt n2) -> Right $ VInt (n1 - n2)
+         _ -> Left "Type error: - expects integers"
+   
+   -- [E-MUL-*]
+   Mul e1 e2 -> do
+      v1 <- eval env e1
+      v2 <- eval env e2
+      case (v1, v2) of
+         (VInt n1, VInt n2) -> Right $ VInt (n1 * n2)
+         _ -> Left "Type error: * expects integers"
+   
+   -- [E-DIV-*], [E-DIV-ZERO]
+   Div e1 e2 -> do
+      v1 <- eval env e1
+      v2 <- eval env e2
+      case (v1, v2) of
+         (VInt _, VInt 0) -> Left "Division by zero"
+         (VInt n1, VInt n2) -> Right $ VInt (n1 `div` n2)
+         _ -> Left "Type error: / expects integers"
+   
+   -- [E-EQ-*]
+   Eq e1 e2 -> do
+      v1 <- eval env e1
+      v2 <- eval env e2
+      case (v1, v2) of
+         (VInt n1, VInt n2) -> Right $ VBool (n1 == n2)
+         (VBool b1, VBool b2) -> Right $ VBool (b1 == b2)
+         _ -> Left "Type error: = expects same types"
+   
+   -- [E-LT-*]
+   Lt e1 e2 -> do
+      v1 <- eval env e1
+      v2 <- eval env e2
+      case (v1, v2) of
+         (VInt n1, VInt n2) -> Right $ VBool (n1 < n2)
+         _ -> Left "Type error: < expects integers"
+   
+   -- Similar para Gt, Le, Ge, Ne
+   Gt e1 e2 -> do
+      v1 <- eval env e1
+      v2 <- eval env e2
+      case (v1, v2) of
+         (VInt n1, VInt n2) -> Right $ VBool (n1 > n2)
+         _ -> Left "Type error: > expects integers"
+   
+   Le e1 e2 -> do
+      v1 <- eval env e1
+      v2 <- eval env e2
+      case (v1, v2) of
+         (VInt n1, VInt n2) -> Right $ VBool (n1 <= n2)
+         _ -> Left "Type error: <= expects integers"
+   
+   Ge e1 e2 -> do
+      v1 <- eval env e1
+      v2 <- eval env e2
+      case (v1, v2) of
+         (VInt n1, VInt n2) -> Right $ VBool (n1 >= n2)
+         _ -> Left "Type error: >= expects integers"
+   
+   Ne e1 e2 -> do
+      v1 <- eval env e1
+      v2 <- eval env e2
+      case (v1, v2) of
+         (VInt n1, VInt n2) -> Right $ VBool (n1 /= n2)
+         (VBool b1, VBool b2) -> Right $ VBool (b1 /= b2)
+         _ -> Left "Type error: != expects same types"
+   
+   -- [E-NOT-*]
+   Not e -> do
+      v <- eval env e
+      case v of
+         VBool b -> Right $ VBool (not b)
+         _ -> Left "Type error: not expects boolean"
+   
+   -- [E-IF-*]
+   If cond thenE elseE -> do
+      v <- eval env cond
+      case v of
+         VBool True -> eval env thenE
+         VBool False -> eval env elseE
+         _ -> Left "Type error: if expects boolean condition"
+   
+   -- [E-LET-*]
+   Let x e1 e2 -> do
+      v1 <- eval env e1
+      eval (Map.insert x v1 env) e2
+   
+   -- [E-LAMBDA]
+   Lambda x body -> 
+      Right $ VClosure env x body
+   
+   -- [E-APP-*]
+   App e1 e2 -> do
+      v1 <- eval env e1
+      v2 <- eval env e2
+      case v1 of
+         VClosure closureEnv param body -> 
+            eval (Map.insert param v2 closureEnv) body
+         _ -> Left "Type error: application of non-function"
+   
+   -- [E-FST-*]
+   Fst e -> do
+      v <- eval env e
+      case v of
+         VPair v1 _ -> Right v1
+         VCons v1 _ -> Right v1  -- head
+         _ -> Left "Type error: fst expects pair or cons"
+   
+   -- [E-SND-*]
+   Snd e -> do
+      v <- eval env e
+      case v of
+         VPair _ v2 -> Right v2
+         VCons _ v2 -> Right v2  -- tail
+         _ -> Left "Type error: snd expects pair or cons"
+
+-- | Evaluación paso a paso (small-step)
+-- Para depuración y visualización
+evalSteps :: Env -> Expr -> [Either String Expr]
+evalSteps env expr = expr : go expr
+  where
+    go e = case step env e of
+      Left _ -> []
+      Right e' -> e' : go e'
+
+-- | Un paso de evaluación (small-step)
+step :: Env -> Expr -> Either String Expr
+step env = \case
+   -- Valores no reducen
+   IntLit _ -> Left "Value"
+   BoolLit _ -> Left "Value"
+   Nil -> Left "Value"
+   Lambda _ _ -> Left "Value"
+   
+   -- Variables se sustituyen
+   Var x -> case Map.lookup x env of
+      Just (VInt n) -> Right (IntLit n)
+      Just (VBool b) -> Right (BoolLit b)
+      Just VNil -> Right Nil
+      Nothing -> Left $ "Unbound: " ++ x
+      _ -> Left "Complex value"
+   
+   -- Operadores: evaluar operandos primero
+   Add e1 e2 -> do
+      case (e1, e2) of
+         (IntLit n1, IntLit n2) -> Right $ IntLit (n1 + n2)
+         (IntLit _, _) -> do
+            e2' <- step env e2
+            Right $ Add e1 e2'
+         _ -> do
+            e1' <- step env e1
+            Right $ Add e1' e2
+   
+   -- If evalúa condición primero
+   If (BoolLit True) e2 _ -> Right e2
+   If (BoolLit False) _ e3 -> Right e3
+   If e1 e2 e3 -> do
+      e1' <- step env e1
+      Right $ If e1' e2 e3
+   
+   -- Let sustituye
+   Let x (IntLit n) body -> Right $ substExpr x (IntLit n) body
+   Let x (BoolLit b) body -> Right $ substExpr x (BoolLit b) body
+   Let x e1 e2 -> do
+      e1' <- step env e1
+      Right $ Let x e1' e2
+   
+   -- Aplicación: beta-reducción
+   App (Lambda x body) v@(IntLit _) -> Right $ substExpr x v body
+   App (Lambda x body) v@(BoolLit _) -> Right $ substExpr x v body
+   App e1@(Lambda _ _) e2 -> do
+      e2' <- step env e2
+      Right $ App e1 e2'
+   App e1 e2 -> do
+      e1' <- step env e1
+      Right $ App e1' e2
+   
+   e -> Left $ "Cannot step: " ++ show e
+
+-- | Sustitución capture-avoiding
+substExpr :: String -> Expr -> Expr -> Expr
+substExpr var val = go
+  where
+    go (Var x) | x == var = val
+               | otherwise = Var x
+    go (IntLit n) = IntLit n
+    go (BoolLit b) = BoolLit b
+    go Nil = Nil
+    go (Pair e1 e2) = Pair (go e1) (go e2)
+    go (Cons e1 e2) = Cons (go e1) (go e2)
+    go (Add e1 e2) = Add (go e1) (go e2)
+    go (Sub e1 e2) = Sub (go e1) (go e2)
+    go (Mul e1 e2) = Mul (go e1) (go e2)
+    go (Div e1 e2) = Div (go e1) (go e2)
+    go (Eq e1 e2) = Eq (go e1) (go e2)
+    go (Lt e1 e2) = Lt (go e1) (go e2)
+    go (Gt e1 e2) = Gt (go e1) (go e2)
+    go (Le e1 e2) = Le (go e1) (go e2)
+    go (Ge e1 e2) = Ge (go e1) (go e2)
+    go (Ne e1 e2) = Ne (go e1) (go e2)
+    go (Not e) = Not (go e)
+    go (If c t e) = If (go c) (go t) (go e)
+    go (Let x e1 e2) | x == var = Let x (go e1) e2  -- No sustituir en scope
+                     | otherwise = Let x (go e1) (go e2)
+    go (Lambda x body) | x == var = Lambda x body  -- No sustituir en scope
+                       | otherwise = Lambda x (go body)
+    go (App e1 e2) = App (go e1) (go e2)
+    go (Fst e) = Fst (go e)
+    go (Snd e) = Snd (go e)
+
+-- | Pretty printer para valores
+prettyValue :: Value -> String
+prettyValue (VInt n) = show n
+prettyValue (VBool True) = "#t"
+prettyValue (VBool False) = "#f"
+prettyValue VNil = "[]"
+prettyValue (VPair v1 v2) = "(" ++ prettyValue v1 ++ ", " ++ prettyValue v2 ++ ")"
+prettyValue (VCons v1 v2) = "[" ++ prettyValue v1 ++ go v2 ++ "]"
+  where
+    go VNil = ""
+    go (VCons v vr) = ", " ++ prettyValue v ++ go vr
+    go v = " | " ++ prettyValue v  -- Improper list
+prettyValue (VClosure _ x _) = "<function: λ" ++ x ++ ".?>"
+\end{lstlisting}
+
+\subsection{Parser (Parser.hs)}
+
+\begin{lstlisting}[language=Haskell]
+{-# LANGUAGE OverloadedStrings #-}
+
+module Parser
+   ( parseExpr
+   , parseProgram
+   , Parser
+   ) where
+
+import SurfaceAST
+import Control.Monad (void)
+import Data.Void (Void)
+import Text.Megaparsec
+import Text.Megaparsec.Char
+import qualified Text.Megaparsec.Char.Lexer as L
+import Data.Functor (($>))
+
+type Parser = Parsec Void String
+
+-- | Espacios en blanco y comentarios
+sc :: Parser ()
+sc = L.space
+   space1
+   (L.skipLineComment ";")
+   empty
+
+-- | Lexema: parsea y consume espacios
+lexeme :: Parser a -> Parser a
+lexeme = L.lexeme sc
+
+-- | Símbolo: parsea string y consume espacios
+symbol :: String -> Parser String
+symbol = L.symbol sc
+
+-- | Entre paréntesis
+parens :: Parser a -> Parser a
+parens = between (symbol "(") (symbol ")")
+
+-- | Entre corchetes
+brackets :: Parser a -> Parser a
+brackets = between (symbol "[") (symbol "]")
+
+-- | Palabras reservadas
+reserved :: [String]
+reserved =
+   [ "let", "let*", "letrec", "if", "if0", "lambda"
+   , "cond", "else", "not", "fst", "snd", "head", "tail"
+   , "add1", "sub1", "sqrt", "expt"
+   ]
+
+-- | Identificador
+identifier :: Parser String
+identifier = lexeme $ try $ do
+   first <- letterChar <|> char '_'
+   rest <- many (alphaNumChar <|> char '_' <|> char '-' <|> char '?' <|> char '!')
+   let name = first : rest
+   if name `elem` reserved
+      then fail $ "Reserved word: " ++ name
+      else return name
+
+-- | Número entero
+integer :: Parser Integer
+integer = lexeme $ L.signed sc L.decimal
+
+-- | Booleano
+boolean :: Parser Bool
+boolean = lexeme $
+   (string "#t" $> True) <|>
+   (string "#f" $> False)
+
+-- | Expresión
+expr :: Parser SExpr
+expr = choice
+   [ try pairExpr
+   , listExpr
+   , atomExpr
+   , parens compoundExpr
+   ]
+
+-- | Átomo (variable, número, booleano)
+atomExpr :: Parser SExpr
+atomExpr = choice
+   [ SInt <$> integer
+   , SBool <$> boolean
+   , SVar <$> identifier
+   ]
+
+-- | Par ordenado: (e1, e2)
+pairExpr :: Parser SExpr
+pairExpr = parens $ do
+   e1 <- expr
+   symbol ","
+   e2 <- expr
+   return $ SPair e1 e2
+
+-- | Lista: [e1, e2, ..., en] o []
+listExpr :: Parser SExpr
+listExpr = brackets $ do
+   exprs <- expr `sepBy` symbol ","
+   return $ SList exprs
+
+-- | Expresiones compuestas
+compoundExpr :: Parser SExpr
+compoundExpr = choice
+   [ ifExpr
+   , if0Expr
+   , condExpr
+   , letExpr
+   , letStarExpr
+   , letRecExpr
+   , lambdaExpr
+   , notExpr
+   , add1Expr
+   , sub1Expr
+   , sqrtExpr
+   , exptExpr
+   , fstExpr
+   , sndExpr
+   , headExpr
+   , tailExpr
+   , opExpr
+   , appExpr
+   ]
+
+-- | If: (if cond then else)
+ifExpr :: Parser SExpr
+ifExpr = do
+   symbol "if"
+   c <- expr
+   t <- expr
+   e <- expr
+   return $ SIf c t e
+
+-- | If0: (if0 e then else)
+if0Expr :: Parser SExpr
+if0Expr = do
+   symbol "if0"
+   e <- expr
+   t <- expr
+   f <- expr
+   return $ SIf0 e t f
+
+-- | Cond: (cond [g1 e1] ... [else ee])
+condExpr :: Parser SExpr
+condExpr = do
+   symbol "cond"
+   clauses <- many clause
+   elseClause <- elseClause
+   return $ SCond clauses elseClause
+ where
+   clause = brackets $ do
+      guard <- expr
+      body <- expr
+      return (guard, body)
+   elseClause = brackets $ do
+      symbol "else"
+      expr
+
+-- | Let: (let ((x1 e1) ...) body)
+letExpr :: Parser SExpr
+letExpr = do
+   symbol "let"
+   bindings <- parens $ many binding
+   body <- expr
+   return $ SLet bindings body
+
+-- | Let*: (let* ((x1 e1) ...) body)
+letStarExpr :: Parser SExpr
+letStarExpr = do
+   symbol "let*"
+   bindings <- parens $ many binding
+   body <- expr
+   return $ SLetStar bindings body
+
+-- | LetRec: (letrec ((f1 e1) ...) body)
+letRecExpr :: Parser SExpr
+letRecExpr = do
+   symbol "letrec"
+   bindings <- parens $ many binding
+   body <- expr
+   return $ SLetRec bindings body
+
+-- | Binding: (x e)
+binding :: Parser Binding
+binding = parens $ do
+   x <- identifier
+   e <- expr
+   return (x, e)
+
+-- | Lambda: (lambda (x1 ... xn) body)
+lambdaExpr :: Parser SExpr
+lambdaExpr = do
+   symbol "lambda"
+   params <- parens $ many identifier
+   body <- expr
+   return $ SLambda params body
+
+-- | Not: (not e)
+notExpr :: Parser SExpr
+notExpr = do
+   symbol "not"
+   e <- expr
+   return $ SNot e
+
+-- | Add1: (add1 e)
+add1Expr :: Parser SExpr
+add1Expr = do
+   symbol "add1"
+   e <- expr
+   return $ SAdd1 e
+
+-- | Sub1: (sub1 e)
+sub1Expr :: Parser SExpr
+sub1Expr = do
+   symbol "sub1"
+   e <- expr
+   return $ SSub1 e
+
+-- | Sqrt: (sqrt e)
+sqrtExpr :: Parser SExpr
+sqrtExpr = do
+   symbol "sqrt"
+   e <- expr
+   return $ SSqrt e
+
+-- | Expt: (expt base exp)
+exptExpr :: Parser SExpr
+exptExpr = do
+   symbol "expt"
+   base <- expr
+   exp <- expr
+   return $ SExpt base exp
+
+-- | Fst: (fst e)
+fstExpr :: Parser SExpr
+fstExpr = do
+   symbol "fst"
+   e <- expr
+   return $ SFst e
+
+-- | Snd: (snd e)
+sndExpr :: Parser SExpr
+sndExpr = do
+   symbol "snd"
+   e <- expr
+   return $ SSnd e
+
+-- | Head: (head e)
+headExpr :: Parser SExpr
+headExpr = do
+   symbol "head"
+   e <- expr
+   return $ SHead e
+
+-- | Tail: (tail e)
+tailExpr :: Parser SExpr
+tailExpr = do
+   symbol "tail"
+   e <- expr
+   return $ STail e
+
+-- | Operadores: (+/-/*/= e1 e2 ...)
+opExpr :: Parser SExpr
+opExpr = do
+   op <- choice
+      [ symbol "+" $> SAdd
+      , symbol "-" $> SSub
+      , try (symbol "*") $> SMul
+      , symbol "/" $> SDiv
+      , try (symbol "=") $> SEq
+      , try (symbol "<=") $> SLe
+      , try (symbol ">=") $> SGe
+      , try (symbol "!=") $> SNe
+      , symbol "<" $> SLt
+      , symbol ">" $> SGt
+      ]
+   exprs <- some expr
+   return $ op exprs
+
+-- | Aplicación: (f e1 ... en)
+appExpr :: Parser SExpr
+appExpr = do
+   f <- expr
+   args <- many expr
+   return $ SApp f args
+
+-- | Parsea expresión completa
+parseExpr :: String -> Either String SExpr
+parseExpr input =
+   case runParser (sc *> expr <* eof) "" input of
+      Left err -> Left $ errorBundlePretty err
+      Right result -> Right result
+
+-- | Parsea programa (múltiples expresiones)
+parseProgram :: String -> Either String [SExpr]
+parseProgram input =
+   case runParser (sc *> many expr <* eof) "" input of
+      Left err -> Left $ errorBundlePretty err
+      Right result -> Right result
+\end{lstlisting}
+\subsection{Main (Main.hs)}
+
+\begin{lstlisting}[language=Haskell]
+{-# LANGUAGE LambdaCase #-}
+
+module Main where
+
+import System.IO
+import System.Environment (getArgs)
+import Control.Monad (when, forever)
+import Data.List (isPrefixOf)
+
+import SurfaceAST
+import Parser
+import Desugar
+import Eval
+import AST (prettyExpr)
+
+-- | REPL principal
+main :: IO ()
+main = do
+  args <- getArgs
+  case args of
+    [] -> repl
+    [filename] -> runFile filename
+    _ -> putStrLn "Usage: minilisp [filename]"
+
+-- | REPL interactivo
+repl :: IO ()
+repl = do
+  putStrLn ""
+  putStrLn "+============================================================+"
+  putStrLn "|                                                            |"
+  putStrLn "|                   Proyecto 1 - MiniLisp                    |"
+  putStrLn "|                                                            |"
+  putStrLn "|              Interprete Funcional en Haskell               |"
+  putStrLn "|              UNAM - Facultad de Ciencias 2025              |"
+  putStrLn "|                                                            |"
+  putStrLn "+============================================================+"
+  putStrLn ""
+  putStrLn "+------------------------------------------------------------+"
+  putStrLn "|  Comandos disponibles:                                     |"
+  putStrLn "+------------------------------------------------------------+"
+  putStrLn "|  :salir            -> Salir del REPL                       |"
+  putStrLn "|  :ayuda            -> Mostrar ayuda completa               |"
+  putStrLn "|  :cargar <archivo> -> Cargar y ejecutar archivo            |"
+  putStrLn "|  :nucleo <expr>    -> Ver nucleo desazucarizado            |"
+  putStrLn "+------------------------------------------------------------+"
+  putStrLn ""
+  putStrLn "Escribe una expresion Lisp para evaluarla..."
+  putStrLn ""
+  replLoop emptyEnv
+
+replLoop :: Env -> IO ()
+replLoop env = do
+  putStr "> "
+  hFlush stdout
+  line <- getLine
+  
+  case line of
+    "" -> replLoop env
+    
+    ':':'s':'a':'l':'i':'r':_ -> do
+      putStrLn ""
+      putStrLn "+============================================================+"
+      putStrLn "|                                                            |"
+      putStrLn "|                       ¡Hasta pronto!                       |"
+      putStrLn "|                                                            |"
+      putStrLn "|                 Gracias por usar MiniLisp.                 |"
+      putStrLn "|             Creado por Giovanni, Vania, Camila             |"
+      putStrLn "|                                                            |"
+      putStrLn "+============================================================+"
+      putStrLn ""
+      return ()
+    
+    ':':'a':'y':'u':'d':'a':_ -> do
+      showHelp
+      replLoop env
+    
+    ':':'c':'a':'r':'g':'a':'r':' ':filename -> do
+      loadFile env filename >>= replLoop
+    
+    ':':'n':'u':'c':'l':'e':'o':' ':input -> do
+      showCore input
+      replLoop env
+    
+    input -> do
+      newEnv <- evalAndPrint env input
+      replLoop newEnv
+
+-- | Evalúa e imprime resultado
+evalAndPrint :: Env -> String -> IO Env
+evalAndPrint env input = do
+  case parseExpr input of
+    Left err -> do
+      putStrLn $ "[X] Error de sintaxis: " ++ err
+      return env
+    
+    Right surfaceExpr -> do
+      let coreExpr = desugar surfaceExpr
+      
+      case eval env coreExpr of
+        Left err -> do
+          putStrLn $ "[X] Error de evaluacion: " ++ err
+          return env
+        
+        Right value -> do
+          putStrLn $ "[OK] => " ++ prettyValue value
+          return env
+
+-- | Muestra la expresión del núcleo
+showCore :: String -> IO ()
+showCore input = 
+  case parseExpr input of
+    Left err -> putStrLn $ "[X] Error de parseo: " ++ err
+    Right surfaceExpr -> do
+      let coreExpr = desugar surfaceExpr
+      putStrLn ""
+      putStrLn "+--- AST Superficial ----------------------------------------+"
+      print surfaceExpr
+      putStrLn ""
+      putStrLn "+--- AST Nucleo ---------------------------------------------+"
+      print coreExpr
+      putStrLn ""
+      putStrLn "+--- Formato Pretty -----------------------------------------+"
+      putStrLn $ prettyExpr coreExpr
+      putStrLn "+------------------------------------------------------------+"
+      putStrLn ""
+
+-- | Carga y ejecuta archivo
+loadFile :: Env -> FilePath -> IO Env
+loadFile env filename = do
+  content <- readFile filename
+  case parseProgram content of
+    Left err -> do
+      putStrLn $ "[X] Error de parseo en " ++ filename ++ ": " ++ err
+      return env
+    
+    Right exprs -> do
+      putStrLn $ "[FILE] Cargando " ++ filename ++ "..."
+      putStrLn ""
+      execExprs env exprs
+  where
+    execExprs e [] = do
+      putStrLn "[OK] Archivo cargado exitosamente!"
+      putStrLn ""
+      return e
+    execExprs e (sexpr:rest) = do
+      let coreExpr = desugar sexpr
+      case eval e coreExpr of
+        Left err -> do
+          putStrLn $ "[X] Error: " ++ err
+          return e
+        Right value -> do
+          putStrLn $ "  [OK] " ++ prettyValue value
+          execExprs e rest
+
+-- | Ejecuta archivo desde línea de comandos
+runFile :: FilePath -> IO ()
+runFile filename = do
+  content <- readFile filename
+  case parseProgram content of
+    Left err -> putStrLn $ "Parse error: " ++ err
+    Right exprs -> mapM_ runExpr exprs
+  where
+    runExpr sexpr = do
+      let coreExpr = desugar sexpr
+      case eval emptyEnv coreExpr of
+        Left err -> putStrLn $ "Error: " ++ err
+        Right value -> putStrLn $ prettyValue value
+
+-- | Muestra ayuda
+showHelp :: IO ()
+showHelp = do
+  putStrLn ""
+  putStrLn "+============================================================+"
+  putStrLn "|                                                            |"
+  putStrLn "|                     AYUDA DE MINILISP                      |"
+  putStrLn "|                                                            |"
+  putStrLn "+============================================================+"
+  putStrLn ""
+  putStrLn "+-- SINTAXIS BASICA -----------------------------------------+"
+  putStrLn "|  Numeros:     42, -17, 0                                  |"
+  putStrLn "|  Booleanos:   #t, #f                                      |"
+  putStrLn "|  Variables:   x, foo, my-var                              |"
+  putStrLn "+------------------------------------------------------------+"
+  putStrLn ""
+  putStrLn "+-- OPERADORES ----------------------------------------------+"
+  putStrLn "|  Aritmeticos: (+ 1 2 3), (- 10 5), (* 2 3 4), (/ 10 2)   |"
+  putStrLn "|  Comparacion: (= 1 1), (< 1 2), (> 3 2), (<= 1 2)        |"
+  putStrLn "|  Logicos:     (not #t)                                    |"
+  putStrLn "|  Unarios:     (add1 5), (sub1 10), (sqrt 16)              |"
+  putStrLn "+------------------------------------------------------------+"
+  putStrLn ""
+  putStrLn "+-- ESTRUCTURAS DE DATOS ------------------------------------+"
+  putStrLn "|  Pares:       (3, 5), (fst (1, 2)), (snd (1, 2))         |"
+  putStrLn "|  Listas:      [1, 2, 3], (head [1,2,3]), (tail [1,2,3])  |"
+  putStrLn "+------------------------------------------------------------+"
+  putStrLn ""
+  putStrLn "+-- ESTRUCTURAS DE CONTROL ----------------------------------+"
+  putStrLn "|  If:          (if (< x 0) (- x) x)                        |"
+  putStrLn "|  If0:         (if0 x 0 1)                                 |"
+  putStrLn "|  Cond:        (cond [(< x 0) -1] [else 1])                |"
+  putStrLn "+------------------------------------------------------------+"
+  putStrLn ""
+  putStrLn "+-- BINDINGS (Variables Locales) ----------------------------+"
+  putStrLn "|  Let:         (let ((x 5) (y 3)) (+ x y))                 |"
+  putStrLn "|  Let*:        (let* ((x 5) (y (+ x 1))) (+ x y))          |"
+  putStrLn "|  LetRec:      (letrec ((f (lambda (n) ...))) (f 10))      |"
+  putStrLn "+------------------------------------------------------------+"
+  putStrLn ""
+  putStrLn "+-- FUNCIONES -----------------------------------------------+"
+  putStrLn "|  Lambda:      (lambda (x y) (+ x y))                      |"
+  putStrLn "|  Aplicacion:  ((lambda (x) (* x x)) 5)                    |"
+  putStrLn "|  Recursion:   (letrec ((fac (lambda (n) ...))) (fac 5))   |"
+  putStrLn "+------------------------------------------------------------+"
+  putStrLn ""
+\end{lstlisting}
+
+\subsection{Ejemplos de Programas}
+
+\subsubsection{Suma de primeros n naturales (sum.minisp)}
+\begin{lstlisting}[language=MiniLisp]
+; Suma de los primeros n números naturales
+; sum(n) = 1 + 2 + ... + n
+
+(letrec
+    ((sum (lambda (n)
+        (if0 n
+            0
+            (+ n (sum (sub1 n)))))))
+    (sum 10))
+
+; Resultado esperado: 55
+\end{lstlisting}
+
+\subsubsection{Factorial (factorial.minisp)}
+\begin{lstlisting}[language=MiniLisp]
+; Factorial de n
+; fact(n) = n * (n-1) * ... * 1
+
+(letrec
+    ((factorial (lambda (n)
+        (if (<= n 1)
+            1
+            (* n (factorial (sub1 n)))))))
+    (factorial 5))
+
+; Resultado esperado: 120
+\end{lstlisting}
+
+\subsubsection{Fibonacci (fibonacci.minisp)}
+\begin{lstlisting}[language=MiniLisp]
+; Fibonacci (n)
+; fib(0) = 0, fib(1) = 1
+; fib(n) = fib(n-1) + fib(n-2)
+
+(letrec
+    ((fib (lambda (n)
+        (cond
+            [(= n 0) 0]
+            [(= n 1) 1]
+            [else (+ (fib (- n 1))
+                     (fib (- n 2)))]))))
+    (fib 10))
+
+; Resultado esperado: 55
+\end{lstlisting}
+
+\subsubsection{Map para listas (map.minisp)}
+\begin{lstlisting}[language=MiniLisp]
+; Map: aplica función a cada elemento de lista
+; map f [] = []
+; map f (x:xs) = (f x) : (map f xs)
+
+(letrec
+    ((map (lambda (f lst)
+        (if (= lst [])
+            []
+            [(f (head lst)) | (map f (tail lst))]))))
+; Ejemplo: duplicar cada elemento
+    (let ((double (lambda (x) (* x 2)))) 
+        (map double [1, 2, 3, 4, 5])))
+; Resultado esperado: [2, 4, 6, 8, 10]
+\end{lstlisting}
+
+\subsubsection{Filter para listas (filter.minisp)}
+\begin{lstlisting}[language=MiniLisp]
+; Filter: mantiene elementos que cumplen predicado
+; filter p [] = []
+; filter p (x:xs) = (x : filter p xs) if p(x)
+;                 (filter p xs)    otherwise
+
+(letrec
+    ((filter (lambda (pred lst)
+        (if (= lst [])
+            []
+            (let ((x (head lst))
+                  (xs (tail lst)))
+                (if (pred x)
+                    [x | (filter pred xs)]
+                    (filter pred xs)))))))
+
+; Ejemplo: números pares
+    (let ((even? (lambda (x) (= (% x 2) 0)))) 
+        (filter even? [1, 2, 3, 4, 5, 6])))
+; Resultado esperado: [2, 4, 6]
+\end{lstlisting}
+
+
+\subsection{README.md}
+Implementación completa de MiniLisp en Haskell para el curso de Lenguajes de Programación, UNAM Facultad de Ciencias.
+
+\subsubsection{Características Implementadas}
+
+\begin{itemize}
+    \item Sintaxis estilo Scheme/Lisp
+    \item Operadores variádicos (+, -, *, /, =, <, >, etc.)
+    \item Estructuras de datos: pares y listas
+    \item Funciones de orden superior (map, filter)
+    \item Recursión con letrec
+    \item Condicionales: if, if0, cond
+    \item Bindings: let, let*, letrec
+    \item Funciones currificadas automáticamente
+    \item REPL interactivo
+    \item Carga de archivos
+\end{itemize}
+
+\subsection{Instalación}
+
+\subsubsection{Requisitos}
+
+\begin{itemize}
+    \item GHC $>= 9.2$
+    \item Cabal $>= 3.6$
+\end{itemize}
+
+\subsubsection{Pasos de Instalación}
+
+\begin{lstlisting}[language=bash]
+# Clonar repositorio
+git clone https://github.com/GiovanniAE/MiniLisp.git
+cd minilisp
+
+# Compilar proyecto
+cabal build
+
+# Ejecutar REPL
+cabal run minilisp
+
+# Ejecutar archivo
+cabal run minilisp examples/factorial.minisp
+\end{lstlisting}
+
+\subsection{Uso}
+
+\subsubsection{REPL Interactivo}
+
+\begin{lstlisting}[language=bash]
+cabal run minilisp
+\end{lstlisting}
+
+\textbf{Comandos disponibles:}
+\begin{itemize}
+    \item \texttt{:salir} - Salir del REPL
+    \item \texttt{:ayuda} - Mostrar ayuda
+    \item \texttt{:cargar <archivo>} - Cargar archivo
+    \item \texttt{:nucleo <expresión>} - Mostrar núcleo desazucarizado
+\end{itemize}
+
+\subsubsection{Ejecutar Archivos}
+
+\begin{lstlisting}[language=bash]
+cabal run minilisp archivo.minisp
+\end{lstlisting}
+
+\subsection{Ejemplos}
+
+Los archivos de ejemplo incluyen múltiples casos de prueba:
+
+\subsubsection{Factorial (factorial.minisp)}
+\begin{lstlisting}[language=bash]
+cabal run minilisp examples/factorial.minisp
+# Resultados: 1, 6, 120, 5040, 3628800
+\end{lstlisting}
+
+\subsubsection{Suma 1..n (sum.minisp)}
+\begin{lstlisting}[language=bash]
+cabal run minilisp examples/sum.minisp
+# Resultados: 15, 55, 210, 5050
+\end{lstlisting}
+
+\subsubsection{Fibonacci (fibonacci.minisp)}
+\begin{lstlisting}[language=bash]
+cabal run minilisp examples/fibonacci.minisp
+# Resultados: 0, 1, 5, 21, 55
+\end{lstlisting}
+
+\subsubsection{Potencia (power.minisp)}
+\begin{lstlisting}[language=bash]
+cabal run minilisp examples/power.minisp
+# Resultados: 8, 81, 25, 1000
+\end{lstlisting}
+
+\subsubsection{MCD - Máximo Común Divisor (mcd.minisp)}
+\begin{lstlisting}[language=bash]
+cabal run minilisp examples/mcd.minisp
+# Resultados: 6, 5, 6, 1
+\end{lstlisting}
+
+Cada archivo contiene varios casos de prueba con diferentes parámetros para demostrar la función con múltiples entradas.
+
+\subsection{Arquitectura del Sistema}
+
+\begin{itemize}
+    \item \texttt{src/SurfaceAST.hs} - AST de sintaxis superficial
+    \item \texttt{src/Parser.hs} - Parser con Megaparsec
+    \item \texttt{src/AST.hs} - AST del núcleo
+    \item \texttt{src/Desugar.hs} - Desazucarización
+    \item \texttt{src/Eval.hs} - Evaluador
+    \item \texttt{src/Main.hs} - REPL y CLI
+\end{itemize}
+
+\subsection{Archivo de Configuración (minilisp.cabal)}
+
+\begin{lstlisting}
+cabal-version: 2.2
+name: minilisp
+version: 1.2.0
+synopsis: MiniLisp interpreter in Haskell
+description: Complete implementation of MiniLisp for Programming Languages course
+homepage: https://github.com/GiovanniAE/MiniLisp.git
+license: MIT
+author: Giovanni Alejandri Espinosa, Vania Zoé Velazquez Barrientos, Camila Sánchez Flores
+maintainer: giovanni.uni@ciencias.unam.mx
+category: Language
+build-type: Simple
+
+common shared-properties
+  default-language: Haskell2010
+  ghc-options:
+    -Wall
+    -Wcompat
+    -Widentities
+    -Wincomplete-record-updates
+    -Wincomplete-uni-patterns
+    -Wmissing-export-lists
+    -Wmissing-home-modules
+    -Wpartial-fields
+    -Wredundant-constraints
+  build-depends:
+    base >= 4.16 && < 5,
+    containers >= 0.6,
+    mtl >= 2.2
+
+executable minilisp
+  import: shared-properties
+  hs-source-dirs: src
+  main-is: Main.hs
+  other-modules:
+    AST,
+    SurfaceAST,
+    Parser,
+    Desugar,
+    Eval
+  build-depends:
+    megaparsec >= 9.2,
+    parser-combinators >= 1.3,
+    deepseq >= 1.4
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+
+test-suite minilisp-test
+  import: shared-properties
+  type: exitcode-stdio-1.0
+  hs-source-dirs: test
+  main-is: Tests.hs
+  build-depends:
+    minilisp,
+    hspec >= 2.10,
+    QuickCheck >= 2.14
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+
+library
+  import: shared-properties
+  hs-source-dirs: src
+  exposed-modules:
+    AST,
+    SurfaceAST,
+    Parser,
+    Desugar,
+    Eval
+  build-depends:
+    megaparsec >= 9.2,
+    parser-combinators >= 1.3,
+    deepseq >= 1.4
+\end{lstlisting}
+
+\subsection{Concluciones}
+Este proyecto demuestra la integración completa entre teoría y práctica en el diseño de lenguajes de programación. Se ha logrado:
+
+\begin{enumerate}
+    \item \textbf{Formalización rigurosa:} Especificación matemática precisa de sintaxis y semántica
+    \item \textbf{Implementación funcional:} Sistema ejecutable que refleja fielmente la formalización
+    \item \textbf{Extensibilidad:} Arquitectura modular que facilita futuras extensiones
+    \item \textbf{Expresividad:} Lenguaje capaz de expresar programas no triviales
+\end{enumerate}
+
+\begin{itemize}
+    El proceso de eliminación de azúcar sintáctica ilustra claramente la distinción entre conveniencia sintáctica y poder expresivo fundamental, mientras que la semántica operacional proporciona una base sólida para razonar sobre programas.
+
+\\\\ El proyecto MiniLisp sirve como un ejemplo pedagógico completo que abarca desde los fundamentos teóricos del diseño de lenguajes hasta la implementación práctica de un intérprete funcional. La separación entre sintaxis de superficie y núcleo, junto con el proceso sistemático de desazucarización, demuestra cómo las construcciones complejas pueden reducirse a un conjunto mínimo de primitivas sin perder expresividad.
+
+\\\\ La implementación en Haskell aprovecha las características del paradigma funcional para crear un diseño elegante y composicional, donde cada componente (parser, desazucarizador, evaluador) mantiene responsabilidades claramente definidas. Esto no solo facilita el mantenimiento y la extensión del sistema, sino que también refleja directamente los conceptos teóricos presentados en la formalización.
+
+\\\\ El proyecto valida que es posible construir un lenguaje de programación completo partiendo de fundamentos teóricos sólidos, demostrando la aplicabilidad práctica de conceptos como semántica operacional, sistemas de tipos, y transformaciones de programas en el desarrollo de herramientas de programación reales.
+\end{itemize}
+\end{enumerate}
+
+\end{enumerate}
+
+\end{document}

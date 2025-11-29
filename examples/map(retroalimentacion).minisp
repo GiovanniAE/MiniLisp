@@ -1,0 +1,16 @@
+; ===== Corrección C2 =====
+; Se agregan casos de prueba para verificar el funcionamiento correcto de map
+; conforme a la retroalimentación del módulo C.
+
+
+
+
+; (letrec
+;    ((map (lambda (f lst)
+;        (if (= lst [])
+;            []
+;            [(f (head lst)) | (map f (tail lst))]))))
+; Ejemplo: duplicar cada elemento
+;    (let ((double (lambda (x) (* x 2)))) 
+;        (map double [1, 2, 3, 4, 5])))
+; Resultado esperado: [2, 4, 6, 8, 10]
